@@ -8,18 +8,164 @@ output:
 
 ## Loading and preprocessing the data
 
+1. Unzip and loading data
+```{r unzi_loading_data, echo=TRUE, results='asis'}
+file <- unz('./activity.zip', 'activity.csv')
+data <- read.csv2(file, sep=",")
+```
 
-
+2. Removing NA values
+```{r removing_na_values, echo=TRUE, results='asis'}
+data_formatted <- data[complete.cases(data),]
+```
+  
 ## What is mean total number of steps taken per day?
+1. Histogram of the total number of steps taken each day
+```{r histogram_numbem_steps_per_day, echo=TRUE, results='asis'}
+#install.packages('plyr')
+library(plyr)
+data_formatted_grouped <- ddply(data_formatted,~date,summarise
+                                ,sum_steps=sum(steps)
+                                ,mean_steps=mean(steps)
+                                ,median_steps=median(steps))
+hist(data_formatted_grouped$sum_steps
+     ,main='Total number of steps per day'
+     ,xlab='Steps per day', ylim=c(0,30), col='Red')
+table(data_formatted_grouped[,c('mean_steps')])
+```
 
-
+2. Report the mean and median total number of steps taken per day
+```{r mean_total_number_steps_per_day, echo=TRUE, results='asis'}
+#install.packages('xtable')
+library(xtable)
+print(type="html", xtable(data_formatted_grouped[,c('date','mean_steps','median_steps')]))
+```
 
 ## What is the average daily activity pattern?
+1. Time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+```{r time_series_plot, echo=TRUE, results='asis'}
+plot(data_formatted_grouped$date
+     ,data_formatted_grouped$mean_steps
+     ,type='n'
+     ,main='Averaged steps per day x Date'
+     ,xlab='Date'
+     ,ylab='Steps number')
+lines(data_formatted_grouped$date
+      ,data_formatted_grouped$mean_steps
+      ,type='l') 
+```
 
+2. Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+```{r which_contains_maximum_number_steps, echo=TRUE, results='asis'}
+max_value <- max(data_formatted_grouped$mean_steps)
+date_max_value <- as.character(data_formatted_grouped[data_formatted_grouped$mean_steps == max_value, ]$date)
 
+```
+On `r date_max_value` it was achieved the maximum number of steps.  
 
 ## Imputing missing values
+1. Total number of missing values in the dataset (i.e. the total number of rows with NAs)
+```{r total_missing_values_per_row, echo=TRUE, results='asis'}
+total_row_numbers_missing <- nrow(data) - nrow(data_formatted)
+```
+There are `r total_row_numbers_missing` rows missing values from the original dataset.
 
+2. New dataset that is equal to the original dataset but with the missing data filled in.
 
+```{r dataset_filled_missing_values, echo=TRUE, results='asis'}
+data_filled <- data
+for(row in 1:nrow(data_filled)) {
+    if(is.na(data_filled[row,]$steps)) {
+        date <- data_filled[data_filled[row,]$date == data_filled$date, ]$date[1]
+        steps_mean <- data_formatted_grouped[data_formatted_grouped$date == date,]$steps_mean
+        if(!is.null(steps_mean)){
+            data_filled[row,]$steps <- steps_mean
+        } else {
+            data_filled[row,]$steps <- 0
+        }
+    }
+}
+
+print('Head with first 25 rows:')
+print(type="html", xtable(data_filled[1:25,]))
+```
+
+3. Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
+
+```{r dataset_comparison_missing_versus_filled, echo=TRUE, results='asis'}
+data_filled_grouped <- ddply(data_filled,~date,summarise
+                             ,sum_steps=sum(steps)
+                             ,mean_steps=mean(steps)
+                             ,median_steps=median(steps, na.rm=TRUE))
+par(mfrow=c(2,3))
+hist(data_formatted_grouped$sum_steps
+     ,main='Sum Original'
+     ,xlab='Steps per day', ylim=c(0,30), col='Red')
+hist(data_formatted_grouped$mean_steps
+     ,main='Mean Original'
+     ,xlab='Steps per day', ylim=c(0,20), col='Blue')
+hist(data_formatted_grouped$median_steps
+     ,main='Median Original'
+     ,xlab='Steps per day', col='Green')
+hist(data_filled_grouped$sum_steps
+     ,main='Sum Filled Missing'
+     ,xlab='Steps per day', ylim=c(0,30), col='Red')
+hist(data_filled_grouped$mean_steps
+     ,main='Mean Filled Missing'
+     ,xlab='Steps per day', ylim=c(0,20), col='Blue')
+hist(data_filled_grouped$median_steps
+     ,main='Meadian Filled Missing'
+     ,xlab='Steps per day', col='Green')
+```
+
+There are differences between the data with and without missing values. The shape tends to mantain, but frequency throught the sequence changed.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+1. New factor variable in the dataset with two levels – “weekday” and “weekend” indicating whether a given date is a weekday or weekend day.
+
+```{r dataset_day_as_factor, echo=TRUE, results='asis'}
+data_filled_grouped <- ddply(data_filled,~date,summarise
+                             ,sum_steps=sum(steps)
+                             ,mean_steps=mean(steps)
+                             ,median_steps=median(steps))
+
+data_filled_grouped$day <- weekdays(as.Date(as.character(data_filled_grouped$date)))
+for(row in 1:nrow(data_filled_grouped)) {
+    if(data_filled_grouped[row,]$day == 'Saturday' || data_filled_grouped[row,]$day == 'Sunday') {
+        data_filled_grouped[row, ]$day <- 'Weekend'
+    } else {
+        data_filled_grouped[row, ]$day <- 'Weekday'
+    }
+}
+data_filled_grouped$day <- factor(data_filled_grouped$day)
+```
+
+2. Panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). The plot should look something like the following, which was creating using simulated data:
+```{r avg_weekdays_weekend_steps, echo=TRUE, results='asis'}
+
+par(mfrow=c(1,2))
+date_formatted_grouped_weekdays <- data_filled_grouped[as.character(data_filled_grouped$day) == 'Weekday',]
+plot(date_formatted_grouped_weekdays$date
+     ,date_formatted_grouped_weekdays$mean_steps
+     ,type='n'
+     ,main='AVG Steps Weekdays'
+     ,xlab='Date'
+     ,ylab='Steps number')
+lines(date_formatted_grouped_weekdays$date
+      ,date_formatted_grouped_weekdays$mean_steps
+      ,type='l') 
+
+date_formatted_grouped_weekends <- data_filled_grouped[as.character(data_filled_grouped$day) == 'Weekend',]
+plot(date_formatted_grouped_weekends$date
+     ,date_formatted_grouped_weekends$mean_steps
+     ,type='n'
+     ,main='AVG Steps Weekends'
+     ,xlab='Date'
+     ,ylab='Steps number')
+lines(date_formatted_grouped_weekends$date
+      ,date_formatted_grouped_weekends$mean_steps
+      ,type='l') 
+```
+
+The **plot will look different** from the one above because I`m not using the activity monitor data. Note that the above plot was made using **base plot**.
